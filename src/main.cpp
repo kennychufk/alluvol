@@ -4,19 +4,21 @@
 #include <openvdb/math/Math.h>
 #include <openvdb/math/Vec3.h>
 #include <openvdb/openvdb.h>
+#include <openvdb/tools/Composite.h>
+#include <openvdb/tools/GridOperators.h>
 #include <openvdb/tools/GridTransformer.h>
+#include <openvdb/tools/LevelSetFilter.h>
+#include <openvdb/tools/MeshToVolume.h>
+#include <openvdb/tools/ParticlesToLevelSet.h>
+#include <openvdb/tools/VolumeToMesh.h>
 #include <openvdb/tree/LeafNode.h>
 
+#include <chrono>
 #include <fstream>
 #include <iomanip>
+#include <ratio>
 #include <sstream>
 #include <string>
-
-#include "openvdb/tools/Composite.h"
-#include "openvdb/tools/LevelSetFilter.h"
-#include "openvdb/tools/MeshToVolume.h"
-#include "openvdb/tools/ParticlesToLevelSet.h"
-#include "openvdb/tools/VolumeToMesh.h"
 
 struct float3 {
   float x;
@@ -126,28 +128,6 @@ std::vector<openvdb::math::Mat4d> read_pile(const char *filename,
     stream.read(reinterpret_cast<char *>(&v), sizeof(F3));
     stream.read(reinterpret_cast<char *>(&q), sizeof(F4));
     stream.read(reinterpret_cast<char *>(&omega), sizeof(F3));
-    std::cout << x.x << ", " << x.y << ", " << x.z << std::endl;
-    std::cout << q.x << ", " << q.y << ", " << q.z << ", " << q.w << std::endl;
-
-    // openvdb::math::Mat4d mat(
-    //     static_cast<double>(1 - 2 * (q.y * q.y + q.z * q.z)),
-    //     static_cast<double>(2 * (q.x * q.y + q.z * q.w)),
-    //     static_cast<double>(2 * (q.x * q.z - q.y * q.w)),
-    //     static_cast<double>(0),
-    //     static_cast<double>(2 * (q.x * q.y - q.z * q.w)),
-    //     static_cast<double>(1 - 2 * (q.x * q.x + q.z * q.z)),
-    //     static_cast<double>(2 * (q.y * q.z + q.x * q.w)),
-    //     static_cast<double>(0),
-    //     static_cast<double>(2 * (q.x * q.z + q.y * q.w)),
-    //     static_cast<double>(2 * (q.y * q.z - q.x * q.w)),
-    //     static_cast<double>(1 - 2 * (q.x * q.x + q.y * q.y)),
-    //     static_cast<double>(0), static_cast<double>(0),
-    //     static_cast<double>(0),
-    //     static_cast<double>(0), static_cast<double>(1));
-    // openvdb::math::Mat4d mat = openvdb::math::Mat4d::identity();
-    // mat.postTranslate(openvdb::math::Vec3d(x.x/voxel_size, x.y/voxel_size,
-    // x.z/voxel_size));
-    // mat.preScale(openvdb::math::Vec3d(1.0/voxel_size, 1.0/voxel_size, 1.0/voxel_size));
     openvdb::math::Mat4d mat(
         static_cast<double>(1 - 2 * (q.y * q.y + q.z * q.z)),
         static_cast<double>(2 * (q.x * q.y + q.z * q.w)),
@@ -163,8 +143,6 @@ std::vector<openvdb::math::Mat4d> read_pile(const char *filename,
         static_cast<double>(0), static_cast<double>(x.x / voxel_size),
         static_cast<double>(x.y / voxel_size),
         static_cast<double>(x.z / voxel_size), static_cast<double>(1));
-    // mat.postScale(openvdb::math::Vec3d(1.0/voxel_size, 1.0/voxel_size, 1.0/voxel_size));
-
     matrices.push_back(mat);
     if (stream.peek() == std::ifstream::traits_type::eof()) break;
   }
@@ -272,49 +250,89 @@ class MyParticleList {
     vel = mVelocityScale * mParticleList[n].v;
   }
   // The method below is only required for attribute transfer
-  void getAtt(size_t n, openvdb::Index32 &att) const {
-    att = openvdb::Index32(n);
-  }
+  void getAtt(size_t n, openvdb::Vec3s &att) const { att = mParticleList[n].v; }
 };
 // VDB will take the particles from my simulation code and build a mesh from
 // them.
 int main(int argc, char *argv[]) {
+  auto t0 = std::chrono::high_resolution_clock::now();
   std::vector<F3> particle_x = read_file<1, F3>(argv[1]);
+  std::vector<F3> particle_v = read_file<1, F3>(argv[2]);
+  auto t1 = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double, std::milli> fp_ms = t1 - t0;
+  std::cout << "read alu: " << fp_ms.count() << std::endl;
   int frame = 0;
   openvdb::Real radius = 1e-3;
+  t0 = std::chrono::high_resolution_clock::now();
   MyParticleList pa(particle_x.size(), 1, 1);
   for (U i = 0; i < particle_x.size(); ++i) {
     F3 const &pos = particle_x[i];
+    F3 const &vel = particle_v[i];
     pa.set(i,
            openvdb::Vec3R(static_cast<openvdb::Real>(pos.x),
                           static_cast<openvdb::Real>(pos.y),
                           static_cast<openvdb::Real>(pos.z)),
-           radius);
+           radius,
+           openvdb::Vec3R(static_cast<openvdb::Real>(vel.x),
+                          static_cast<openvdb::Real>(vel.y),
+                          static_cast<openvdb::Real>(vel.z)));
   }
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "set MyParticleList: " << fp_ms.count() << std::endl;
   openvdb::Real voxelSize = radius / 1.001 * 2.0 / sqrt(3.0) / 2.0,
-                halfWidth = 2.0;
+                halfWidth = 1.0;
   openvdb::FloatGrid::Ptr ls =
       openvdb::createLevelSet<openvdb::FloatGrid>(voxelSize, halfWidth);
-  openvdb::tools::ParticlesToLevelSet<openvdb::FloatGrid, openvdb::Index32>
+  t0 = std::chrono::high_resolution_clock::now();
+  openvdb::tools::ParticlesToLevelSet<openvdb::FloatGrid, openvdb::Vec3s>
       raster(*ls);
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "ParticlesToLevelSet: " << fp_ms.count() << std::endl;
 
+  t0 = std::chrono::high_resolution_clock::now();
   raster.setGrainSize(1);  // a value of zero disables threading
   raster.rasterizeSpheres(pa);
   raster.finalize(true);
-  openvdb::tools::LevelSetFilter<openvdb::FloatGrid> filter(*ls);
-  std::cout << "filtering" << std::endl;
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "rasterize & finalize: " << fp_ms.count() << std::endl;
+  openvdb::Vec3SGrid::Ptr attr_grid =
+      openvdb::gridPtrCast<openvdb::Vec3SGrid>(raster.attributeGrid());
+  t0 = std::chrono::high_resolution_clock::now();
+  openvdb::FloatGrid::Ptr speed_grid = openvdb::tools::magnitude(*attr_grid);
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "calculate speed: " << fp_ms.count() << std::endl;
+  openvdb::tools::LevelSetFilter<openvdb::FloatGrid, openvdb::FloatGrid> filter(
+      *ls);
+  t0 = std::chrono::high_resolution_clock::now();
   filter.dilate(3);
-  std::cout << "dilated" << std::endl;
-  // for (int i = 0; i < 1; ++i) {
-  //   filter.meanCurvature();
-  // }
-  std::cout << "curved" << std::endl;
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "dilated 3: " << fp_ms.count() << std::endl;
+  t0 = std::chrono::high_resolution_clock::now();
+  filter.setMaskRange(0.2, 0.3);
+  filter.invertMask();
+  for (int i = 0; i < 1; ++i) {
+    filter.meanCurvature(speed_grid.get());
+  }
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "meanCurvature: " << fp_ms.count() << std::endl;
+  t0 = std::chrono::high_resolution_clock::now();
   filter.erode();
-  std::cout << "eroded" << std::endl;
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "eroded: " << fp_ms.count() << std::endl;
   // filter.meanCurvature();
   // std::cout << "final smooth" << std::endl;
-  // filter.gaussian();
-  std::cout << "gaussian" << std::endl;
+  t0 = std::chrono::high_resolution_clock::now();
+  filter.gaussian();
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "gaussian: " << fp_ms.count() << std::endl;
   //
   std::vector<openvdb::Vec3s> point_list;
   std::vector<openvdb::Vec3I> prim_list;
@@ -333,43 +351,51 @@ int main(int argc, char *argv[]) {
       "/home/kennychufk/workspace/pythonWs/alluvion-optim/rl-truth-f2caa5/"
       "73.pile",
       voxelSize);
-  // openvdb::math::Transform::Ptr transform =
-  //     openvdb::math::Transform::createLinearTransform(matrices[1]);
   openvdb::math::Transform::Ptr transform =
       openvdb::math::Transform::createLinearTransform(voxelSize);
-  // transform->preScale(voxel_size);
-  // transform->postTranslate(openvdb::math::Vec3d(voxel_size * 0.5, voxel_size
-  // * 0.5, voxel_size * 0.5));
 
   float exBand = 3.0f;
   float inBand = 3.0f;
+  t0 = std::chrono::high_resolution_clock::now();
   openvdb::FloatGrid::Ptr collision_obj_ls =
       openvdb::tools::meshToVolume<openvdb::FloatGrid>(
           mesh, *transform, exBand, inBand, conversionFlags, nullptr);
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "meshToVolume: " << fp_ms.count() << std::endl;
 
   openvdb::FloatGrid::Ptr filtered_grid = filter.grid().deepCopy();
   for (int i = 1; i < 8; ++i) {
+    t0 = std::chrono::high_resolution_clock::now();
     openvdb::FloatGrid::Ptr transformed_collision_obj_ls =
         openvdb::FloatGrid::create();
     openvdb::tools::GridTransformer transformer(matrices[i]);
     transformer.transformGrid<openvdb::tools::BoxSampler, openvdb::FloatGrid>(
         *collision_obj_ls, *transformed_collision_obj_ls);
+    t1 = std::chrono::high_resolution_clock::now();
+    fp_ms = t1 - t0;
+    std::cout << "transformGrid: " << fp_ms.count() << std::endl;
 
     // openvdb::tools::csgDifference(*filtered_grid, *collision_obj_ls);
+    t0 = std::chrono::high_resolution_clock::now();
     openvdb::tools::csgDifference(*filtered_grid,
                                   *transformed_collision_obj_ls);
+    t1 = std::chrono::high_resolution_clock::now();
+    fp_ms = t1 - t0;
+    std::cout << "csgDifference: " << fp_ms.count() << std::endl;
   }
 
   openvdb::tools::VolumeToMesh mesher;
+  t0 = std::chrono::high_resolution_clock::now();
   mesher.operator()<openvdb::FloatGrid>(*filtered_grid);
-  // mesher.operator()<openvdb::FloatGrid>(*collision_obj_ls);
-  std::cout << "No. of polygon pool = " << mesher.polygonPoolListSize()
-            << std::endl;
-  printf("meshing done\n");
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "mesher: " << fp_ms.count() << std::endl;
 
-  std::ofstream outfile(argv[2]);
+  std::ofstream outfile(argv[3]);
 
   // write vertices
+  t0 = std::chrono::high_resolution_clock::now();
   for (unsigned int i = 0; i < mesher.pointListSize(); ++i) {
     outfile << "v"
             << " " << mesher.pointList()[i][0] << " "
@@ -393,4 +419,7 @@ int main(int argc, char *argv[]) {
   }
 
   outfile.close();
+  t1 = std::chrono::high_resolution_clock::now();
+  fp_ms = t1 - t0;
+  std::cout << "export: " << fp_ms.count() << std::endl;
 }
