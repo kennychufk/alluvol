@@ -1,11 +1,18 @@
 cmake_minimum_required(VERSION 3.20.0)
-project(alluvion
+project(allumesh
   LANGUAGES CXX C
 )
-# set (CMAKE_CUDA_STANDARD 17)
 
 find_package(OpenVDB REQUIRED)
 
-# add_subdirectory(lib)
-# add_subdirectory(tests)
 add_subdirectory(src)
+
+include(GNUInstallDirs)
+install(TARGETS allumesh
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+set(CPACK_GENERATOR "DEB")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Kenny Chu")
+SET(CPACK_DEBIAN_PACKAGE_DEPENDS "openvdb")
+include(CPack)
