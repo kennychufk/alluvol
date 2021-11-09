@@ -14,6 +14,7 @@
 #include <openvdb/tree/LeafNode.h>
 
 #include <chrono>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <ratio>
@@ -339,7 +340,10 @@ int main(int argc, char *argv[]) {
   std::vector<openvdb::Vec3s> point_list;
   std::vector<openvdb::Vec3I> prim_list;
 
-  load_obj(argv[5], point_list, prim_list, 1 / voxelSize);
+  bool has_buoy = (std::strlen(argv[5]) > 0);
+  if (has_buoy) {
+    load_obj(argv[5], point_list, prim_list, 1 / voxelSize);
+  }
   openvdb::tools::QuadAndTriangleDataAdapter<openvdb::Vec3s, openvdb::Vec3I>
       mesh(point_list, prim_list);
   t0 = std::chrono::high_resolution_clock::now();
@@ -362,9 +366,12 @@ int main(int argc, char *argv[]) {
   fp_ms = t1 - t0;
   std::cout << "meshToVolume(container): " << fp_ms.count() << std::endl;
 
-  std::string agitator_scale_str(argv[7]);
-  double scale = std::stod(agitator_scale_str);
-  load_obj(argv[6], point_list, prim_list, scale / voxelSize);
+  bool has_agitator = (std::strlen(argv[6]) > 0 && std::strlen(argv[7]));
+  if (has_agitator) {
+    std::string agitator_scale_str(argv[7]);
+    double scale = std::stod(agitator_scale_str);
+    load_obj(argv[6], point_list, prim_list, scale / voxelSize);
+  }
   openvdb::tools::QuadAndTriangleDataAdapter<openvdb::Vec3s, openvdb::Vec3I>
       agitator_mesh(point_list, prim_list);
   t0 = std::chrono::high_resolution_clock::now();
