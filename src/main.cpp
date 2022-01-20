@@ -40,6 +40,10 @@ using F4 = float4;
 template <U D, typename M>
 std::vector<M> read_file(const char *filename) {
   std::ifstream stream(filename, std::ios::binary);
+  if (!stream.is_open()) {
+    std::cerr << "Failed to open " << filename << std::endl;
+    abort();
+  }
   U linear_shape = 1;
   for (U i = 0; i < D; ++i) {
     U shape_item;
@@ -81,6 +85,10 @@ void load_obj(const char *filename, std::vector<openvdb::Vec3s> &points,
   int num_tokens;
   int face_token_id;
   file_stream.exceptions(std::ios_base::badbit);
+  if (!file_stream.is_open()) {
+    std::cerr << "Failed to open " << filename << std::endl;
+    abort();
+  }
   while (std::getline(file_stream, line)) {
     num_tokens = 0;
     line_stream.clear();
@@ -126,6 +134,10 @@ std::vector<openvdb::math::Mat4d> read_pile(const char *filename,
   F4 q;
   F3 omega;
   std::vector<openvdb::math::Mat4d> matrices;
+  if (!stream.is_open()) {
+    std::cerr << "Failed to open " << filename << std::endl;
+    abort();
+  }
   while (true) {
     stream.read(reinterpret_cast<char *>(&x), sizeof(F3));
     stream.read(reinterpret_cast<char *>(&v), sizeof(F3));
