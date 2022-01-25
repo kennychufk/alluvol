@@ -352,7 +352,7 @@ int main(int argc, char *argv[]) {
   std::vector<openvdb::Vec3s> point_list;
   std::vector<openvdb::Vec3I> prim_list;
 
-  bool has_buoy = (std::strlen(argv[5]) > 0);
+  bool has_buoy = (std::strlen(argv[5]) > 1 || argv[5][0] != '0');
   if (has_buoy) {
     load_obj(argv[5], point_list, prim_list, 1 / voxelSize);
   }
@@ -378,7 +378,7 @@ int main(int argc, char *argv[]) {
   fp_ms = t1 - t0;
   std::cout << "meshToVolume(container): " << fp_ms.count() << std::endl;
 
-  bool has_agitator = (std::strlen(argv[6]) > 0 && std::strlen(argv[7]));
+  bool has_agitator = (std::strlen(argv[6]) > 1 || argv[6][0] != '0');
   if (has_agitator) {
     std::string agitator_scale_str(argv[7]);
     double scale = std::stod(agitator_scale_str);
