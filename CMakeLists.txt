@@ -1,11 +1,33 @@
-cmake_minimum_required(VERSION 3.20.0)
-project(allumesh
+cmake_minimum_required (VERSION 3.20.0)
+project(alluvol
   LANGUAGES CXX C
 )
 
-find_package(OpenVDB REQUIRED)
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-add_subdirectory(src)
+find_package(OpenVDB REQUIRED)
+find_package(pybind11 REQUIRED)
+
+add_subdirectory(lib)
+
+add_executable(allumesh
+  src/main.cpp
+)
+
+target_link_libraries(allumesh
+  PRIVATE
+    lib_alluvol
+)
+
+add_executable(lscomp
+  src/lscomp.cpp
+)
+
+target_link_libraries(lscomp
+  PRIVATE
+    lib_alluvol
+)
 
 include(GNUInstallDirs)
 install(TARGETS allumesh
