@@ -14,6 +14,10 @@
 
 using namespace alluvol;
 
+bool is_file_exist(const char *fileName) {
+  std::ifstream infile(fileName);
+  return infile.good();
+}
 // VDB will take the particles from my simulation code and build a mesh from
 // them.
 int main(int argc, char *argv[]) {
@@ -27,8 +31,23 @@ int main(int argc, char *argv[]) {
   t0 = std::chrono::high_resolution_clock::now();
 
   openvdb::Real voxel_size = radius / 1.001 * 2.0 / sqrt(3.0) / 2.0;
-  openvdb::FloatGrid::Ptr filtered_grid =
-      create_liquid_level_set(particle_x, radius, voxel_size, 0.2, 0.3);
+  std::string alu_filename(argv[2]);
+  std::string vdb_filename =
+      alu_filename.substr(0, alu_filename.size() - 4).append(".vdb");
+  openvdb::FloatGrid::Ptr filtered_grid = nullptr;
+  if (is_file_exist(vdb_filename.c_str())) {
+    openvdb::initialize();
+    std::cout << "VDB file " << vdb_filename << " exists" << std::endl;
+    openvdb::io::File file(vdb_filename);
+    file.open();
+    openvdb::GridBase::Ptr base_grid =
+        file.readGrid(file.beginName().gridName());
+    file.close();
+    filtered_grid = openvdb::gridPtrCast<openvdb::FloatGrid>(base_grid);
+  } else {
+    filtered_grid =
+        create_liquid_level_set(particle_x, radius, voxel_size, 0.2, 0.3);
+  }
 
   openvdb::FloatGrid::Ptr buoy_ls;
   bool has_buoy = (std::strlen(argv[5]) > 1 || argv[5][0] != '0');
