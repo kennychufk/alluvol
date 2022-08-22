@@ -30,8 +30,9 @@ target_link_libraries(lscomp
 )
 
 include(GNUInstallDirs)
-install(TARGETS allumesh
+install(TARGETS allumesh lib_alluvol
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 set(CPACK_GENERATOR "DEB")

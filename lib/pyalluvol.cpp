@@ -1,5 +1,6 @@
 #include <openvdb/openvdb.h>
 #include <openvdb/tools/Composite.h>
+#include <openvdb/tools/GridTransformer.h>
 #include <openvdb/tools/Statistics.h>
 #include <pybind11/detail/common.h>
 #include <pybind11/numpy.h>
@@ -32,7 +33,41 @@ PYBIND11_MODULE(_alluvol, m) {
              openvdb::tools::accumulate(grid.cbeginValueOn(), acc);
              return acc.sum;
            })
-      .def("deepCopy", &openvdb::FloatGrid::deepCopy);
+      .def("deepCopy", &openvdb::FloatGrid::deepCopy)
+      .def("resample",
+           [](const openvdb::FloatGrid& grid, openvdb::Real voxel_size) {
+             openvdb::FloatGrid::Ptr dest = openvdb::FloatGrid::create();
+             dest->setTransform(
+                 openvdb::math::Transform::createLinearTransform(voxel_size));
+             openvdb::tools::resampleToMatch<openvdb::tools::QuadraticSampler>(
+                 grid, *dest);
+             return dest;
+           })
+      .def("write",
+           [](openvdb::FloatGrid::Ptr grid, std::string const& filename) {
+             openvdb::io::File file(filename);
+             openvdb::GridPtrVec grids;
+             grids.push_back(grid);
+             file.write(grids);
+             file.close();
+           })
+      .def_static("read",
+                  [](std::string const& filename) {
+                    openvdb::io::File file(filename);
+                    file.open();
+                    openvdb::GridBase::Ptr base_grid =
+                        file.readGrid(file.beginName().gridName());
+                    file.close();
+                    return openvdb::gridPtrCast<openvdb::FloatGrid>(base_grid);
+                  })
+      .def("write_obj",
+           [](const openvdb::FloatGrid& grid, char const* filename) {
+             openvdb::tools::VolumeToMesh mesher;
+             mesher.operator()<openvdb::FloatGrid>(grid);
+             io::write_obj(mesher, filename);
+           })
+      .def_property("name", &openvdb::FloatGrid::getName,
+                    &openvdb::FloatGrid::setName);
 
   py::class_<openvdb::tools::VolumeToMesh>(m, "VolumeToMesh")
       .def(py::init<double, double, bool>(), py::arg("isovalue") = 0,
@@ -51,6 +86,82 @@ PYBIND11_MODULE(_alluvol, m) {
       .def_property_readonly("mean", &openvdb::math::Stats::mean)
       .def_property_readonly("var", &openvdb::math::Stats::var)
       .def_property_readonly("std", &openvdb::math::Stats::std);
+
+  py::class_<F3>(m, "F3", py::buffer_protocol())
+      .def(py::init([](py::buffer b) {
+        py::buffer_info info = b.request();
+        if (info.ndim != 1)
+          throw std::runtime_error("Incompatible buffer dimension!");
+        if (info.shape[0] != 3)
+          throw std::runtime_error(
+              "Incompatible dimension: expected a vector of 3!");
+        F3 result;
+        if (info.format == py::format_descriptor<float>::format()) {
+          float const* ptr = static_cast<float const*>(info.ptr);
+          result.x = ptr[0];
+          result.y = ptr[1];
+          result.z = ptr[2];
+        } else if (info.format == py::format_descriptor<double>::format()) {
+          double const* ptr = static_cast<double const*>(info.ptr);
+          result.x = static_cast<float>(ptr[0]);
+          result.y = static_cast<float>(ptr[1]);
+          result.z = static_cast<float>(ptr[2]);
+        } else {
+          throw std::runtime_error(
+              "Incompatible format: expected a float/double array!");
+        }
+        return result;
+      }))
+      .def_buffer([](F3& v) -> py::buffer_info {
+        return py::buffer_info(
+            &v,                                     /* Pointer to buffer */
+            sizeof(float),                          /* Size of one scalar */
+            py::format_descriptor<float>::format(), /* Python struct-style
+                                                       format descriptor */
+            1,                                      /* Number of dimensions */
+            {3},                                    /* Buffer dimensions */
+            {sizeof(float)} /* Strides (in bytes) for each index */
+        );
+      });
+  py::class_<F4>(m, "F4", py::buffer_protocol())
+      .def(py::init([](py::buffer b) {
+        py::buffer_info info = b.request();
+        if (info.ndim != 1)
+          throw std::runtime_error("Incompatible buffer dimension!");
+        if (info.shape[0] != 4)
+          throw std::runtime_error(
+              "Incompatible dimension: expected a vector of 4!");
+        F4 result;
+        if (info.format == py::format_descriptor<float>::format()) {
+          float const* ptr = static_cast<float const*>(info.ptr);
+          result.x = ptr[0];
+          result.y = ptr[1];
+          result.z = ptr[2];
+          result.w = ptr[3];
+        } else if (info.format == py::format_descriptor<double>::format()) {
+          double const* ptr = static_cast<double const*>(info.ptr);
+          result.x = static_cast<float>(ptr[0]);
+          result.y = static_cast<float>(ptr[1]);
+          result.z = static_cast<float>(ptr[2]);
+          result.w = static_cast<float>(ptr[3]);
+        } else {
+          throw std::runtime_error(
+              "Incompatible format: expected a float/double array!");
+        }
+        return result;
+      }))
+      .def_buffer([](F4& v) -> py::buffer_info {
+        return py::buffer_info(
+            &v,                                     /* Pointer to buffer */
+            sizeof(float),                          /* Size of one scalar */
+            py::format_descriptor<float>::format(), /* Python struct-style
+                                                       format descriptor */
+            1,                                      /* Number of dimensions */
+            {4},                                    /* Buffer dimensions */
+            {sizeof(float)} /* Strides (in bytes) for each index */
+        );
+      });
+  m.def("initialize", &openvdb::initialize);
 
   m.def(
       "create_liquid_level_set",
