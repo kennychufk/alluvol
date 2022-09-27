@@ -60,12 +60,15 @@ PYBIND11_MODULE(_alluvol, m) {
                     file.close();
                     return openvdb::gridPtrCast<openvdb::FloatGrid>(base_grid);
                   })
-      .def("write_obj",
-           [](const openvdb::FloatGrid& grid, char const* filename) {
-             openvdb::tools::VolumeToMesh mesher;
-             mesher.operator()<openvdb::FloatGrid>(grid);
-             io::write_obj(mesher, filename);
-           })
+      .def(
+          "write_obj",
+          [](const openvdb::FloatGrid& grid, char const* filename,
+             double isovalue = 0) {
+            openvdb::tools::VolumeToMesh mesher(isovalue);
+            mesher.operator()<openvdb::FloatGrid>(grid);
+            io::write_obj(mesher, filename);
+          },
+          py::arg("filename"), py::arg("isovalue") = 0)
       .def_property("name", &openvdb::FloatGrid::getName,
                     &openvdb::FloatGrid::setName);
 
