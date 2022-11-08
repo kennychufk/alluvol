@@ -20,7 +20,6 @@
 #include <sstream>
 #include <string>
 
-#include "alluvol/inside_squared_accumulation.hpp"
 #include "alluvol/io.hpp"
 #include "alluvol/level_set.hpp"
 #include "alluvol/particle_list.hpp"
@@ -57,9 +56,6 @@ int main(int argc, char *argv[]) {
       openvdb::tools::statistics(liquid_ls1->cbeginValueOn());
   std::cout << "min: " << stat1.min() << " max: " << stat1.max()
             << " avg: " << stat1.avg() << " var: " << stat1.var() << std::endl;
-  InsideSquaredAccumulation acc;
-  openvdb::tools::accumulate(liquid_ls1->cbeginValueOn(), acc);
-  std::cout << "sum: " << acc.sum << std::endl;
 
   openvdb::tools::VolumeToMesh mesher;
   mesher.operator()<openvdb::FloatGrid>(*liquid_ls1);

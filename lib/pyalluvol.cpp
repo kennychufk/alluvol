@@ -1,6 +1,7 @@
 #include <openvdb/openvdb.h>
 #include <openvdb/tools/Composite.h>
 #include <openvdb/tools/GridTransformer.h>
+#include <openvdb/tools/LevelSetMeasure.h>
 #include <openvdb/tools/Statistics.h>
 #include <pybind11/detail/common.h>
 #include <pybind11/numpy.h>
@@ -10,7 +11,6 @@
 
 #include <stdexcept>
 
-#include "alluvol/inside_squared_accumulation.hpp"
 #include "alluvol/io.hpp"
 #include "alluvol/level_set.hpp"
 
@@ -27,11 +27,15 @@ PYBIND11_MODULE(_alluvol, m) {
            [](const openvdb::FloatGrid& grid) {
              return openvdb::tools::statistics(grid.cbeginValueOn());
            })
-      .def("calculate_inside_squared_distance_sum",
+      .def("calculate_volume",
            [](const openvdb::FloatGrid& grid) {
-             InsideSquaredAccumulation acc;
-             openvdb::tools::accumulate(grid.cbeginValueOn(), acc);
-             return acc.sum;
+             return openvdb::tools::LevelSetMeasure<openvdb::FloatGrid>(grid)
+                 .volume();
+           })
+      .def("calculate_area",
+           [](const openvdb::FloatGrid& grid) {
+             return openvdb::tools::LevelSetMeasure<openvdb::FloatGrid>(grid)
+                 .area();
            })
       .def("deepCopy", &openvdb::FloatGrid::deepCopy)
       .def("resample",
@@ -42,6 +46,10 @@ PYBIND11_MODULE(_alluvol, m) {
              openvdb::tools::resampleToMatch<openvdb::tools::QuadraticSampler>(
                  grid, *dest);
              return dest;
+           })
+      .def("setGridClassAsLevelSet",
+           [](openvdb::FloatGrid& grid) {
+             grid.setGridClass(openvdb::GridClass::GRID_LEVEL_SET);
            })
       .def("write",
            [](openvdb::FloatGrid::Ptr grid, std::string const& filename) {
