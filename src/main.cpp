@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
   openvdb::Real radius = std::stod(radius_str);
   t0 = std::chrono::high_resolution_clock::now();
 
-  openvdb::Real voxel_size = radius / 1.001 * 2.0 / sqrt(3.0) / 2.0;
+  openvdb::Real voxel_size = radius / sqrt(3.0);
   std::string alu_filename(argv[2]);
   std::string vdb_filename =
       alu_filename.substr(0, alu_filename.size() - 4).append(".vdb");
