@@ -2,6 +2,7 @@
 #include <openvdb/tools/Composite.h>
 #include <openvdb/tools/GridTransformer.h>
 #include <openvdb/tools/LevelSetMeasure.h>
+#include <openvdb/tools/RayIntersector.h>
 #include <openvdb/tools/Statistics.h>
 #include <pybind11/detail/common.h>
 #include <pybind11/numpy.h>
@@ -88,6 +89,66 @@ PYBIND11_MODULE(_alluvol, m) {
                           const openvdb::FloatGrid& grid) {
         volume_to_mesh.operator()<openvdb::FloatGrid>(grid);
       });
+  using LevelSetRayIntersectorFloat =
+      openvdb::tools::LevelSetRayIntersector<openvdb::FloatGrid>;
+  py::class_<LevelSetRayIntersectorFloat>(m, "LevelSetRayIntersector")
+      .def(py::init<const openvdb::FloatGrid&,
+                    const LevelSetRayIntersectorFloat::ValueT&>(),
+           py::arg("grid"), py::arg("isovalue") = 0)
+      .def(
+          "probe_height",
+          [](const LevelSetRayIntersectorFloat& intersector, const F3& eye,
+             openvdb::Real default_value) {
+            ;
+            LevelSetRayIntersectorFloat::Vec3Type world;
+            return intersector.intersectsWS(
+                       LevelSetRayIntersectorFloat::RayType(
+                           LevelSetRayIntersectorFloat::Vec3Type(eye.x, eye.y,
+                                                                 eye.z),
+                           LevelSetRayIntersectorFloat::Vec3Type(0, -1, 0)),
+                       world)
+                       ? world.y()
+                       : default_value;
+          },
+          py::arg("eye"),
+          py::arg("default_value") =
+              std::numeric_limits<openvdb::Real>::quiet_NaN())
+      .def(
+          "probe_heights",
+          [](const LevelSetRayIntersectorFloat& intersector,
+             py::array_t<openvdb::Real> eyes, openvdb::Real default_value) {
+            if (eyes.ndim() != 2) {
+              throw std::runtime_error("Number of dimensions must be 2");
+            }
+            if (eyes.shape(1) != 3) {
+              throw std::runtime_error(
+                  "The size of the second dimension must be 3");
+            }
+            py::ssize_t num_samples = eyes.shape(0);
+            auto result = py::array_t<openvdb::Real>(num_samples);
+
+            LevelSetRayIntersectorFloat::Vec3Type const* eyes_ptr =
+                reinterpret_cast<LevelSetRayIntersectorFloat::Vec3Type const*>(
+                    eyes.data());
+            openvdb::Real* result_ptr =
+                static_cast<openvdb::Real*>(result.mutable_data());
+
+            LevelSetRayIntersectorFloat::Vec3Type world;
+            LevelSetRayIntersectorFloat::Vec3Type down(0, -1, 0);
+
+            for (py::ssize_t i = 0; i < num_samples; ++i) {
+              result_ptr[i] =
+                  intersector.intersectsWS(LevelSetRayIntersectorFloat::RayType(
+                                               *(eyes_ptr + i), down),
+                                           world)
+                      ? world.y()
+                      : default_value;
+            }
+            return result;
+          },
+          py::arg("eyes"),
+          py::arg("default_value") =
+              std::numeric_limits<openvdb::Real>::quiet_NaN());
 
   py::class_<openvdb::math::Stats>(m, "Stats")
       .def_property_readonly("min", &openvdb::math::Stats::min)
