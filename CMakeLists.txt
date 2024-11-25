@@ -3,39 +3,49 @@ project(alluvol
   LANGUAGES CXX C
 )
 
-set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(USE_SYSTEM_OPENVDB "Use system-installed OpenVDB instead of downloading a standalone OpenVDB" OFF)
 
-find_package(OpenVDB REQUIRED)
-find_package(pybind11 REQUIRED)
+include(FetchContent)
 
-add_subdirectory(lib)
+if (USE_SYSTEM_OPENVDB)
+  set(CMAKE_CXX_STANDARD 11)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  find_package(OpenVDB REQUIRED)
+else()
+  FetchContent_Declare(
+    openvdb
+    GIT_REPOSITORY https://github.com/AcademySoftwareFoundation/openvdb.git
+    GIT_TAG        v11.0.0
+  )
+  FetchContent_MakeAvailable(openvdb)
+endif()
 
-add_executable(allumesh
-  src/main.cpp
+FetchContent_Declare(
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11
+    GIT_TAG        v2.13.1
+)
+FetchContent_MakeAvailable(pybind11)
+
+list(APPEND lib_alluvol_SOURCES
+  src/io.cpp
+  src/particle_list.cpp
+  src/level_set.cpp
+  src/geometry.cpp
 )
 
-target_link_libraries(allumesh
-  PRIVATE
-    lib_alluvol
+pybind11_add_module(_ext
+  src/pyalluvol.cpp
+  ${lib_alluvol_SOURCES}
 )
 
-add_executable(lscomp
-  src/lscomp.cpp
+target_compile_definitions(_ext
+  PRIVATE VERSION_INFO=${ALLUVOL_VERSION_INFO})
+
+target_include_directories(_ext
+  PUBLIC
+    $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
 )
 
-target_link_libraries(lscomp
-  PRIVATE
-    lib_alluvol
-)
-
-include(GNUInstallDirs)
-install(TARGETS allumesh lib_alluvol
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-
-set(CPACK_GENERATOR "DEB")
-set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Kenny Chu")
-SET(CPACK_DEBIAN_PACKAGE_DEPENDS "openvdb")
-include(CPack)
+target_link_libraries(_ext PRIVATE openvdb)

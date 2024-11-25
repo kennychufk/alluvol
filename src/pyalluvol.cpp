@@ -15,12 +15,21 @@
 #include "alluvol/io.hpp"
 #include "alluvol/level_set.hpp"
 
+#define STRINGIFY(x) #x
+#define MACRO_STRINGIFY(x) STRINGIFY(x)
+
 using namespace alluvol;
 namespace py = pybind11;
 
-PYBIND11_MODULE(_alluvol, m) {
-  m.doc() = "OpenVDB for SPH";
+PYBIND11_MODULE(_ext, m) {
+  m.doc() = "OpenVDB Python bindings for point rasterization";
   using namespace pybind11;
+
+#ifdef VERSION_INFO
+  m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
+#else
+  m.attr("__version__") = "dev";
+#endif
 
   py::class_<openvdb::FloatGrid, openvdb::FloatGrid::Ptr>(m, "FloatGrid")
       .def("activeVoxelCount", &openvdb::FloatGrid::activeVoxelCount)
@@ -268,11 +277,14 @@ PYBIND11_MODULE(_alluvol, m) {
                           openvdb::Real>(&transform_level_set),
         py::arg("grid"), py::arg("x"), py::arg("q"), py::arg("voxel_size"));
   m.def("csgDifference", &openvdb::tools::csgDifference<openvdb::FloatGrid>,
-        py::arg("a"), py::arg("b"), py::arg("prune") = true);
+        py::arg("a"), py::arg("b"), py::arg("prune") = true,
+        py::arg("pruneCancelledTiles") = false);
   m.def("csgUnion", &openvdb::tools::csgUnion<openvdb::FloatGrid>, py::arg("a"),
-        py::arg("b"), py::arg("prune") = true);
+        py::arg("b"), py::arg("prune") = true,
+        py::arg("pruneCancelledTiles") = false);
   m.def("csgIntersection", &openvdb::tools::csgIntersection<openvdb::FloatGrid>,
-        py::arg("a"), py::arg("b"), py::arg("prune") = true);
+        py::arg("a"), py::arg("b"), py::arg("prune") = true,
+        py::arg("pruneCancelledTiles") = false);
 
   m.def("csgDifferenceCopy",
         &openvdb::tools::csgDifferenceCopy<openvdb::FloatGrid>, py::arg("a"),

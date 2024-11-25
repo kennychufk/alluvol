@@ -5,14 +5,9 @@ list(APPEND lib_alluvol_SOURCES
   ${CMAKE_CURRENT_LIST_DIR}/geometry.cpp
 )
 
-add_library(lib_alluvol
-  ${lib_alluvol_SOURCES}
-)
+add_library(lib_alluvol SHARED ${lib_alluvol_SOURCES})
 
-target_link_libraries(lib_alluvol
-  PUBLIC
-    OpenVDB::openvdb
-)
+target_link_libraries(lib_alluvol PUBLIC openvdb)
 
 
 target_include_directories(lib_alluvol
@@ -21,24 +16,9 @@ target_include_directories(lib_alluvol
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
 )
 
-add_library(_alluvol
-  MODULE
-    pyalluvol.cpp
-)
-
-set_target_properties(_alluvol
-  PROPERTIES
-    CXX_VISIBILITY_PRESET "hidden"
-    CUDA_VISIBILITY_PRESET "hidden"
-    PREFIX "${PYTHON_MODULE_PREFIX}"
-    SUFFIX "${PYTHON_MODULE_EXTENSION}"
-)
-
-target_include_directories(_alluvol
-  PUBLIC
-    $<INSTALL_INTERFACE:include>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-)
+pybind11_add_module(_alluvol pyalluvol.cpp)
+target_compile_definitions(_alluvol
+  PRIVATE VERSION_INFO=${ALLUVOL_VERSION_INFO})
 
 target_link_libraries(_alluvol
   PUBLIC
